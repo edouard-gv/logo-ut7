@@ -198,7 +198,7 @@ function restoreConfigurationFromUrl(): string | null {
   }
 }
 
-function renderSvg(shape: Shape, settings: Settings): string {
+function renderSvg(shape: Shape, settings: Settings, forDownload = false): string {
   // Trois niveaux de 48 unités occupent 144 unités et laissent une marge naturelle dans un aperçu de 200 px.
   const svgUnitsPerLevel = 48;
   // Les quatre niveaux sont numérotés de 0 en bas à 3 en haut.
@@ -486,7 +486,7 @@ function renderSvg(shape: Shape, settings: Settings): string {
   const maxX = Math.max(...allX) + pad;
   const minY = Math.min(...allY) - pad;
   const maxY = Math.max(...allY) + pad;
-  // Le fond est Margaux, ou crème lorsque les barres et les liens sont transparents.
+  // Le fond transparent est prévisualisé en crème et exporté en gris foncé.
   const backgroundShape = (color: string): string => settings.inscribedTrapezoid
     ? `<path d="${trapezoidPath}" fill="${color}" />`
     : `<rect x="${minX}" y="${minY}" width="${maxX - minX}" height="${maxY - minY}" fill="${color}" />`;
@@ -500,8 +500,8 @@ function renderSvg(shape: Shape, settings: Settings): string {
     ? ''
     : settings.transparentShapes
       ? usesBooleanCutout
-        ? `<path d="${booleanCutoutPath}" fill="#e9e8e3" fill-rule="evenodd" />`
-        : `<g mask="url(#shape-cutout)">${backgroundShape('#e9e8e3')}</g>`
+        ? `<path d="${booleanCutoutPath}" fill="${forDownload ? '#30332d' : '#e9e8e3'}" fill-rule="evenodd" />`
+        : `<g mask="url(#shape-cutout)">${backgroundShape(forDownload ? '#30332d' : '#e9e8e3')}</g>`
       : backgroundShape('#6b1426');
   const foreground = settings.transparentShapes
     ? ''
@@ -537,11 +537,18 @@ function update(): void {
 form.addEventListener('input', update);
 $('#download').addEventListener('click', () => {
   if (!currentSvg) return;
-  const blob = new Blob([currentSvg], { type: 'image/svg+xml' });
+  const settings = getSettings();
+  const downloadSvg = renderSvg(
+    parseNotation($<HTMLInputElement>('#notation').value),
+    settings,
+    true,
+  );
+  const blob = new Blob([downloadSvg], { type: 'image/svg+xml' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = 'ut7.svg';
+  const encodedConfiguration = encodeConfiguration(createSavedConfiguration());
+  anchor.download = `ut7-${encodedConfiguration}.svg`;
   anchor.click();
   URL.revokeObjectURL(url);
 });
