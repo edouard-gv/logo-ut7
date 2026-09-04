@@ -199,18 +199,21 @@ function restoreConfigurationFromUrl(): string | null {
 }
 
 function renderSvg(shape: Shape, settings: Settings): string {
-  const unit = 48;
+  // Trois niveaux de 48 unités occupent 144 unités et laissent une marge naturelle dans un aperçu de 200 px.
+  const svgUnitsPerLevel = 48;
+  // Les quatre niveaux sont numérotés de 0 en bas à 3 en haut.
   const levelHeight = [0];
-  settings.levelGaps.forEach((gap, index) => levelHeight.push(levelHeight[index] + gap * unit));
+  settings.levelGaps.forEach((gap, index) => levelHeight.push(levelHeight[index] + gap * svgUnitsPerLevel));
   const totalHeight = levelHeight[3];
   const levelY = levelHeight.map((height) => totalHeight - height);
   const spans: Record<BarKind, number> = { c: 1, m: 2, l: 3 };
-  const stroke = settings.barWidth * unit;
-  const linkStroke = settings.linkWidth * unit;
+  const stroke = settings.barWidth * svgUnitsPerLevel;
+  const linkStroke = settings.linkWidth * svgUnitsPerLevel;
   const angle = settings.angle * Math.PI / 180;
   const bars: Array<{ xBottom: number; xTop: number; yBottom: number; yTop: number }> = [];
   let previousRightEdge: number | null = null;
 
+  // Une barre courte, moyenne ou longue occupe respectivement un, deux ou trois niveaux.
   for (const bar of shape.bars) {
     const bottomLevel = bar.level;
     const topLevel = bar.level + spans[bar.kind];
@@ -221,8 +224,7 @@ function renderSvg(shape: Shape, settings: Settings): string {
     const yTop = levelY[topLevel];
     const height = yBottom - yTop;
     const dx = bar.diagonal ? -Math.tan(angle) * height : 0;
-    // On compense le dépassement vertical des coins, puis on prolonge
-    // l'enveloppe d'une demi-épaisseur de lien au-delà de chaque niveau.
+    // Les extrémités contiennent une demi-épaisseur de lien au-delà de leur niveau.
     const cornerOffsetY = bar.diagonal ? Math.abs(Math.sin(angle)) * stroke / 2 : 0;
     const verticalExtension = linkStroke / 2 - cornerOffsetY;
     const xExtension = height === 0 ? 0 : (dx / height) * verticalExtension;
@@ -239,7 +241,8 @@ function renderSvg(shape: Shape, settings: Settings): string {
     const horizontalHalfStroke = Math.abs(rawBar.yTop - rawBar.yBottom) / axisLength * stroke / 2;
     const rawLeftEdge = Math.min(rawBar.xBottom, rawBar.xTop) - horizontalHalfStroke;
     const rawRightEdge = Math.max(rawBar.xBottom, rawBar.xTop) + horizontalHalfStroke;
-    const gap = settings.barGap * unit * (1 + bar.extraGapBefore);
+    // L'espace sépare les contours extérieurs, même lorsque les barres sont inclinées.
+    const gap = settings.barGap * svgUnitsPerLevel * (1 + bar.extraGapBefore);
     const offsetX: number = previousRightEdge === null
       ? -rawLeftEdge
       : previousRightEdge + gap - rawLeftEdge;
@@ -271,6 +274,7 @@ function renderSvg(shape: Shape, settings: Settings): string {
     return [ring];
   };
 
+  // Les coupes haute et basse peuvent être rendues horizontales indépendamment.
   const barPolygons = bars.map((bar) => {
     const polygon = linePolygon(bar.xBottom, bar.yBottom, bar.xTop, bar.yTop, stroke);
     const ring = polygon[0];
@@ -309,6 +313,7 @@ function renderSvg(shape: Shape, settings: Settings): string {
     return [Math.min(...intersections), Math.max(...intersections)];
   };
 
+  // Un lien est horizontal et rejoint les contours réels des deux barres voisines.
   shape.links.forEach((levels, index) => {
     levels.forEach((level) => {
       const y = levelY[level];
@@ -326,9 +331,11 @@ function renderSvg(shape: Shape, settings: Settings): string {
   });
   polygons.push(...barPolygons);
 
+  // Les barres et les liens forment une seule géométrie SVG.
   const merged = polygonClipping.union(polygons[0], ...polygons.slice(1));
   const format = (value: number): string => Number(value.toFixed(4)).toString();
-  const cornerRadius = settings.roundedCorners * unit;
+  // Le rayon d'arrondi s'applique à tous les coins de la géométrie fusionnée.
+  const cornerRadius = settings.roundedCorners * svgUnitsPerLevel;
   const pathData = merged.flatMap((polygon) => polygon.map((closedRing) => {
     const ring = closedRing.slice(0, -1) as Point[];
     const corners = ring.map((point, index) => {
@@ -359,6 +366,7 @@ function renderSvg(shape: Shape, settings: Settings): string {
     return `${data}Z`;
   })).join('');
 
+  // Le trapèze est circonscrit uniquement à la première et à la dernière barre.
   const outerSide = (polygon: Polygon, useLeftSide: boolean): [Point, Point] => {
     const ring = polygon[0];
     const sides: [Point, Point][] = [[ring[0], ring[1]], [ring[2], ring[3]]];
@@ -408,12 +416,14 @@ function renderSvg(shape: Shape, settings: Settings): string {
   const trapezoidPath = `${trapezoidPoints.map((point, index) =>
     `${index ? 'L' : 'M'}${format(point[0])} ${format(point[1])}`,
   ).join('')}Z`;
+  // Sans arrondi, le mode trapèze transparent utilise une soustraction géométrique exacte.
   const usesBooleanCutout = settings.inscribedTrapezoid
     && settings.transparentShapes
     && !settings.transparentBackground
     && settings.roundedCorners === 0;
   const trapezoidPolygon: Polygon = [[...trapezoidPoints, trapezoidPoints[0]]];
   const cornerFillers: Polygon[] = [];
+  // Un triangle résiduel est effacé, sauf lorsqu'il touche un lien horizontal.
   if (usesBooleanCutout) {
     const tolerance = 1e-5;
     const addCornerFillers = (polygon: Polygon): void => {
@@ -476,6 +486,7 @@ function renderSvg(shape: Shape, settings: Settings): string {
   const maxX = Math.max(...allX) + pad;
   const minY = Math.min(...allY) - pad;
   const maxY = Math.max(...allY) + pad;
+  // Le fond est Margaux, ou crème lorsque les barres et les liens sont transparents.
   const backgroundShape = (color: string): string => settings.inscribedTrapezoid
     ? `<path d="${trapezoidPath}" fill="${color}" />`
     : `<rect x="${minX}" y="${minY}" width="${maxX - minX}" height="${maxY - minY}" fill="${color}" />`;
