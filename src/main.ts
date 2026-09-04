@@ -198,7 +198,7 @@ function restoreConfigurationFromUrl(): string | null {
   }
 }
 
-function renderSvg(shape: Shape, settings: Settings, forDownload = false): string {
+function renderSvg(shape: Shape, settings: Settings): string {
   // Trois niveaux de 48 unités occupent 144 unités et laissent une marge naturelle dans un aperçu de 200 px.
   const svgUnitsPerLevel = 48;
   // Les quatre niveaux sont numérotés de 0 en bas à 3 en haut.
@@ -500,8 +500,8 @@ function renderSvg(shape: Shape, settings: Settings, forDownload = false): strin
     ? ''
     : settings.transparentShapes
       ? usesBooleanCutout
-        ? `<path d="${booleanCutoutPath}" fill="${forDownload ? '#30332d' : '#e9e8e3'}" fill-rule="evenodd" />`
-        : `<g mask="url(#shape-cutout)">${backgroundShape(forDownload ? '#30332d' : '#e9e8e3')}</g>`
+        ? `<path d="${booleanCutoutPath}" fill="#e9e8e3" fill-rule="evenodd" />`
+        : `<g mask="url(#shape-cutout)">${backgroundShape('#e9e8e3')}</g>`
       : backgroundShape('#6b1426');
   const foreground = settings.transparentShapes
     ? ''
@@ -541,7 +541,6 @@ $('#download').addEventListener('click', () => {
   const downloadSvg = renderSvg(
     parseNotation($<HTMLInputElement>('#notation').value),
     settings,
-    true,
   );
   const blob = new Blob([downloadSvg], { type: 'image/svg+xml' });
   const url = URL.createObjectURL(blob);
@@ -551,6 +550,64 @@ $('#download').addEventListener('click', () => {
   anchor.download = `ut7-${encodedConfiguration}.svg`;
   anchor.click();
   URL.revokeObjectURL(url);
+});
+
+$('#download-png').addEventListener('click', async () => {
+  if (!currentSvg) return;
+  try {
+    const settings = getSettings();
+    const downloadSvg = renderSvg(
+      parseNotation($<HTMLInputElement>('#notation').value),
+      settings,
+    );
+    const svgDocument = new DOMParser().parseFromString(downloadSvg, 'image/svg+xml');
+    const svgElement = svgDocument.documentElement;
+    const viewBox = svgElement.getAttribute('viewBox')?.trim().split(/\s+/).map(Number);
+    if (!viewBox || viewBox.length !== 4 || viewBox.some((value) => !Number.isFinite(value))) {
+      throw new Error('Les dimensions du SVG sont invalides.');
+    }
+    const [, , viewBoxWidth, viewBoxHeight] = viewBox;
+    const maxPngSize = Math.round(200 * settings.scale);
+    const ratio = viewBoxWidth / viewBoxHeight;
+    const pngWidth = ratio >= 1 ? maxPngSize : Math.max(1, Math.round(maxPngSize * ratio));
+    const pngHeight = ratio >= 1 ? Math.max(1, Math.round(maxPngSize / ratio)) : maxPngSize;
+    svgElement.setAttribute('width', pngWidth.toString());
+    svgElement.setAttribute('height', pngHeight.toString());
+    const sizedSvg = new XMLSerializer().serializeToString(svgDocument);
+    const svgBlob = new Blob([sizedSvg], { type: 'image/svg+xml' });
+    const svgUrl = URL.createObjectURL(svgBlob);
+    const image = new Image();
+
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error('Impossible de convertir le SVG en PNG.'));
+      image.src = svgUrl;
+    });
+    URL.revokeObjectURL(svgUrl);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = pngWidth;
+    canvas.height = pngHeight;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Le rendu PNG n’est pas disponible.');
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    const pngBlob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error('Impossible de créer le fichier PNG.'));
+      }, 'image/png');
+    });
+    const pngUrl = URL.createObjectURL(pngBlob);
+    const anchor = document.createElement('a');
+    anchor.href = pngUrl;
+    const encodedConfiguration = encodeConfiguration(createSavedConfiguration());
+    anchor.download = `ut7-${encodedConfiguration}.png`;
+    anchor.click();
+    URL.revokeObjectURL(pngUrl);
+  } catch (reason) {
+    error.textContent = reason instanceof Error ? reason.message : 'Impossible de télécharger le PNG.';
+  }
 });
 
 $('#save-config').addEventListener('click', async () => {
