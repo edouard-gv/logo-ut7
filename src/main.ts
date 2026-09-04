@@ -98,6 +98,105 @@ function getSettings(): Settings {
   };
 }
 
+type SavedConfiguration = [
+  version: 1,
+  notation: string,
+  values: [
+    gap01: number,
+    gap12: number,
+    gap23: number,
+    barGap: number,
+    angle: number,
+    barWidth: number,
+    linkWidth: number,
+    roundedCorners: number,
+    scale: number,
+  ],
+  options: number,
+];
+
+function createSavedConfiguration(): SavedConfiguration {
+  const settings = getSettings();
+  const options = Number(settings.horizontalTops)
+    | (Number(settings.horizontalBottoms) << 1)
+    | (Number(settings.inscribedTrapezoid) << 2)
+    | (Number(settings.transparentBackground) << 3)
+    | (Number(settings.transparentShapes) << 4);
+  return [
+    1,
+    $<HTMLInputElement>('#notation').value,
+    [
+      ...settings.levelGaps,
+      settings.barGap,
+      settings.angle,
+      settings.barWidth,
+      settings.linkWidth,
+      settings.roundedCorners,
+      settings.scale,
+    ],
+    options,
+  ];
+}
+
+function encodeConfiguration(configuration: SavedConfiguration): string {
+  const bytes = new TextEncoder().encode(JSON.stringify(configuration));
+  let binary = '';
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function decodeConfiguration(encoded: string): SavedConfiguration {
+  const base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+  const binary = atob(padded);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(bytes)) as SavedConfiguration;
+}
+
+function restoreConfigurationFromUrl(): string | null {
+  const encoded = new URL(window.location.href).searchParams.get('config');
+  if (!encoded) return null;
+  try {
+    const configuration = decodeConfiguration(encoded);
+    const [version, notation, savedValues, options] = configuration;
+    if (version !== 1 || typeof notation !== 'string' || !Array.isArray(savedValues) || savedValues.length < 9 || typeof options !== 'number') {
+      throw new Error('version inconnue');
+    }
+    $<HTMLInputElement>('#notation').value = notation;
+    const values: Record<string, number> = {
+      gap01: savedValues[0],
+      gap12: savedValues[1],
+      gap23: savedValues[2],
+      barGap: savedValues[3],
+      angle: savedValues[4],
+      barWidth: savedValues[5],
+      linkWidth: savedValues[6],
+      roundedCorners: savedValues[7],
+      scale: savedValues[8],
+    };
+    Object.entries(values).forEach(([id, value]) => {
+      if (!Number.isFinite(value)) return;
+      const input = $<HTMLInputElement>(`#${id}`);
+      const min = input.min === '' ? value : Number(input.min);
+      const max = input.max === '' ? value : Number(input.max);
+      input.value = Math.min(max, Math.max(min, value)).toString();
+    });
+    const checks: Record<string, boolean> = {
+      horizontalTops: Boolean(options & 1),
+      horizontalBottoms: Boolean(options & 2),
+      inscribedTrapezoid: Boolean(options & 4),
+      transparentBackground: Boolean(options & 8),
+      transparentShapes: Boolean(options & 16),
+    };
+    Object.entries(checks).forEach(([id, checked]) => {
+      $<HTMLInputElement>(`#${id}`).checked = checked === true;
+    });
+    return null;
+  } catch {
+    return 'La configuration présente dans l’URL est invalide.';
+  }
+}
+
 function renderSvg(shape: Shape, settings: Settings): string {
   const unit = 48;
   const levelHeight = [0];
@@ -435,4 +534,33 @@ $('#download').addEventListener('click', () => {
   URL.revokeObjectURL(url);
 });
 
+$('#save-config').addEventListener('click', async () => {
+  const button = $<HTMLButtonElement>('#save-config');
+  try {
+    const configuration = createSavedConfiguration();
+    const url = new URL(window.location.href);
+    url.searchParams.set('config', encodeConfiguration(configuration));
+    url.hash = '';
+    window.history.replaceState(null, '', url);
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url.toString());
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = url.toString();
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.append(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+    }
+    button.textContent = 'URL copiée';
+    window.setTimeout(() => { button.textContent = 'Sauver la configuration'; }, 1800);
+  } catch {
+    error.textContent = 'Impossible de copier l’URL de configuration.';
+  }
+});
+
+const configurationError = restoreConfigurationFromUrl();
 update();
+if (configurationError) error.textContent = configurationError;

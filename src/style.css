@@ -32,6 +32,7 @@ output { color: #b9f34c; font-family: "Cascadia Mono", "SFMono-Regular", Consola
 input[type="range"] { accent-color: #b9f34c; padding: 0; height: 20px; border: 0; background: transparent; }
 .preview-panel { min-height: 500px; padding: 24px; display: flex; flex-direction: column; }
 .preview-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.preview-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 .preview-heading p { margin: 0 0 3px; font-weight: 600; }
 .preview-heading span { color: #74776f; font-size: 12px; }
 button { padding: 10px 14px; border: 1px solid #b9f34c; border-radius: 99px; background: transparent; color: #b9f34c; cursor: pointer; font-size: 12px; font-weight: 700; transition: .2s; }
