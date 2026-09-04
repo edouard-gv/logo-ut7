@@ -35,7 +35,63 @@ const error = $('#error');
 const scaleOutput = $('#scale-output');
 let currentSvg = '';
 
-function parseNotation(source: string): Shape {
+type ParameterValues = Map<number, number>;
+
+function parameterUsages(source: string): Map<number, boolean> {
+  const usages = new Map<number, boolean>();
+  source.trim().toLowerCase().split(',').map((part) => part.trim()).forEach((token) => {
+    const match = token.match(/^([eb])p([1-9]\d*)$/);
+    if (!match) return;
+    const index = Number(match[2]);
+    usages.set(index, usages.get(index) === true || match[1] === 'b');
+  });
+  return usages;
+}
+
+function getParameterValues(): ParameterValues {
+  return new Map([...document.querySelectorAll<HTMLInputElement>('input[data-parameter]')]
+    .map((input) => [Number(input.dataset.parameter), Number(input.value)]));
+}
+
+function syncParameterControls(restoredValues: ParameterValues = new Map()): void {
+  const previousValues = getParameterValues();
+  const usages = parameterUsages($<HTMLInputElement>('#notation').value);
+  const fieldset = $<HTMLFieldSetElement>('#parameters-fieldset');
+  const container = $('#parameters');
+  container.replaceChildren();
+  fieldset.hidden = usages.size === 0;
+
+  [...usages.entries()].sort(([first], [second]) => first - second).forEach(([index, usedByEmptyBar]) => {
+    const min = usedByEmptyBar ? 0 : -1;
+    const rawValue = restoredValues.get(index) ?? previousValues.get(index) ?? 1;
+    const value = Math.min(1, Math.max(min, rawValue));
+    const label = document.createElement('label');
+    const heading = document.createElement('span');
+    const name = document.createElement('span');
+    const output = document.createElement('output');
+    const input = document.createElement('input');
+    name.textContent = `p${index}`;
+    output.dataset.parameterOutput = index.toString();
+    output.textContent = value.toString();
+    heading.append(name, output);
+    input.type = 'range';
+    input.min = min.toString();
+    input.max = '1';
+    input.step = '0.01';
+    input.value = value.toString();
+    input.dataset.parameter = index.toString();
+    label.append(heading, input);
+    container.append(label);
+  });
+}
+
+function parameterValue(index: number, values: ParameterValues): number {
+  const value = values.get(index);
+  if (value === undefined || !Number.isFinite(value)) throw new Error(`Valeur incorrecte pour « p${index} ».`);
+  return value;
+}
+
+function parseNotation(source: string, parameterValues: ParameterValues): Shape {
   const tokens = source.trim().toLowerCase().split(',').map((part) => part.trim()).filter(Boolean);
   if (!tokens.length) throw new Error('La notation est vide.');
 
@@ -62,10 +118,12 @@ function parseNotation(source: string): Shape {
       hasPendingGap = false;
       continue;
     }
-    const emptyBarMatch = token.match(/^b(\+?\d+(?:\.\d+)?)?$/);
+    const emptyBarMatch = token.match(/^b(?:(\+?\d+(?:\.\d+)?)|p([1-9]\d*))?$/);
     if (emptyBarMatch) {
       if (bars.length) links.push(pendingLinks);
-      const widthMultiplier = emptyBarMatch[1] === undefined ? 1 : Number(emptyBarMatch[1]);
+      const widthMultiplier = emptyBarMatch[2]
+        ? parameterValue(Number(emptyBarMatch[2]), parameterValues)
+        : emptyBarMatch[1] === undefined ? 1 : Number(emptyBarMatch[1]);
       if (widthMultiplier < 0) throw new Error(`La largeur de « ${token} » ne peut pas être négative.`);
       bars.push({
         kind: 'l',
@@ -80,10 +138,12 @@ function parseNotation(source: string): Shape {
       hasPendingGap = false;
       continue;
     }
-    const gapMatch = token.match(/^e([+-]?\d+(?:\.\d+)?)$/);
+    const gapMatch = token.match(/^e(?:([+-]?\d+(?:\.\d+)?)|p([1-9]\d*))$/);
     if (gapMatch) {
       if (!bars.length) throw new Error(`Espacement « ${token} » mal placé.`);
-      pendingExtraGap += Number(gapMatch[1]);
+      pendingExtraGap += gapMatch[2]
+        ? parameterValue(Number(gapMatch[2]), parameterValues)
+        : Number(gapMatch[1]);
       hasPendingGap = true;
       continue;
     }
@@ -126,21 +186,23 @@ function getSettings(): Settings {
   };
 }
 
+type SavedValues = [
+  gap01: number,
+  gap12: number,
+  gap23: number,
+  barGap: number,
+  angle: number,
+  barWidth: number,
+  linkWidth: number,
+  roundedCorners: number,
+  scale: number,
+];
 type SavedConfiguration = [
   version: 1,
   notation: string,
-  values: [
-    gap01: number,
-    gap12: number,
-    gap23: number,
-    barGap: number,
-    angle: number,
-    barWidth: number,
-    linkWidth: number,
-    roundedCorners: number,
-    scale: number,
-  ],
+  values: SavedValues,
   options: number,
+  parameters: [index: number, value: number][],
 ];
 
 function createSavedConfiguration(): SavedConfiguration {
@@ -163,6 +225,7 @@ function createSavedConfiguration(): SavedConfiguration {
       settings.scale,
     ],
     options,
+    [...getParameterValues()],
   ];
 }
 
@@ -186,11 +249,19 @@ function restoreConfigurationFromUrl(): string | null {
   if (!encoded) return null;
   try {
     const configuration = decodeConfiguration(encoded);
-    const [version, notation, savedValues, options] = configuration;
-    if (version !== 1 || typeof notation !== 'string' || !Array.isArray(savedValues) || savedValues.length < 9 || typeof options !== 'number') {
+    const [version, notation, savedValues, options, savedParameters] = configuration;
+    if (version !== 1 || typeof notation !== 'string' || !Array.isArray(savedValues) || savedValues.length < 9 || typeof options !== 'number' || !Array.isArray(savedParameters)) {
       throw new Error('version inconnue');
     }
     $<HTMLInputElement>('#notation').value = notation;
+    const restoredParameters = new Map<number, number>();
+    savedParameters.forEach((entry) => {
+      if (!Array.isArray(entry) || entry.length !== 2 || !Number.isInteger(entry[0]) || !Number.isFinite(entry[1])) {
+        throw new Error('paramètre invalide');
+      }
+      restoredParameters.set(entry[0], entry[1]);
+    });
+    syncParameterControls(restoredParameters);
     const values: Record<string, number> = {
       gap01: savedValues[0],
       gap12: savedValues[1],
@@ -556,7 +627,7 @@ function update(): void {
   try {
     const notation = $<HTMLInputElement>('#notation').value;
     const settings = getSettings();
-    currentSvg = renderSvg(parseNotation(notation), settings);
+    currentSvg = renderSvg(parseNotation(notation, getParameterValues()), settings);
     preview.innerHTML = currentSvg;
     const svg = preview.querySelector('svg');
     if (svg) svg.style.transform = `scale(${settings.scale})`;
@@ -566,18 +637,25 @@ function update(): void {
       const value = Number(input.value).toString().replace('-', '−');
       output.textContent = input.id === 'angle' ? `${value}°` : value;
     });
+    document.querySelectorAll<HTMLOutputElement>('output[data-parameter-output]').forEach((output) => {
+      const input = document.querySelector<HTMLInputElement>(`input[data-parameter="${output.dataset.parameterOutput}"]`)!;
+      output.textContent = Number(input.value).toString().replace('-', '−');
+    });
     error.textContent = '';
   } catch (reason) {
     error.textContent = reason instanceof Error ? reason.message : 'Notation invalide.';
   }
 }
 
-form.addEventListener('input', update);
+form.addEventListener('input', (event) => {
+  if ((event.target as HTMLInputElement).id === 'notation') syncParameterControls();
+  update();
+});
 $('#download').addEventListener('click', () => {
   if (!currentSvg) return;
   const settings = getSettings();
   const downloadSvg = renderSvg(
-    parseNotation($<HTMLInputElement>('#notation').value),
+    parseNotation($<HTMLInputElement>('#notation').value, getParameterValues()),
     settings,
   );
   const blob = new Blob([downloadSvg], { type: 'image/svg+xml' });
@@ -595,7 +673,7 @@ $('#download-png').addEventListener('click', async () => {
   try {
     const settings = getSettings();
     const downloadSvg = renderSvg(
-      parseNotation($<HTMLInputElement>('#notation').value),
+      parseNotation($<HTMLInputElement>('#notation').value, getParameterValues()),
       settings,
     );
     const svgDocument = new DOMParser().parseFromString(downloadSvg, 'image/svg+xml');
@@ -676,5 +754,6 @@ $('#save-config').addEventListener('click', async () => {
 });
 
 const configurationError = restoreConfigurationFromUrl();
+syncParameterControls();
 update();
 if (configurationError) error.textContent = configurationError;

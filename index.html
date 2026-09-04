@@ -19,8 +19,13 @@
           <label class="notation-field">
             <span>Notation</span>
             <input id="notation" value="m1/,e-1,c1,1,c1,m1,12,e-0.4,m0/" spellcheck="false" autocomplete="off" />
-            <small id="notation-help">Séparateur , · / incline · e1 ajoute · e-1 retire · b ou b2 crée une barre vide</small>
+            <small id="notation-help">Séparateur , · / incline · e1 ajoute · e-1 retire · b crée une barre vide · ep1 et bp1 sont paramétrables</small>
           </label>
+
+          <fieldset id="parameters-fieldset" hidden>
+            <legend>Paramètres</legend>
+            <div id="parameters" class="control-grid"></div>
+          </fieldset>
 
           <fieldset>
             <legend>Espacement des niveaux</legend>
