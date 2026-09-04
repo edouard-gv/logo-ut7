@@ -19,7 +19,7 @@
           <label class="notation-field">
             <span>Notation</span>
             <input id="notation" value="m1/,e-1,c1,1,c1,m1,12,e-0.4,m0/" spellcheck="false" autocomplete="off" />
-            <small id="notation-help">Séparateur , · / incline · e1 ajoute · e-1 retire un espace</small>
+            <small id="notation-help">Séparateur , · / incline · e1 ou e+1 ajoute · e-1 retire</small>
           </label>
 
           <fieldset>
@@ -40,6 +40,9 @@
               <label><span>Épaisseur des liens <output data-value-for="linkWidth">0.1</output></span><input id="linkWidth" type="range" value="0.1" min="0.01" max="0.5" step="0.01" /></label>
               <label class="check-field"><input id="horizontalTops" type="checkbox" /><span>Haut des barres horizontal</span></label>
               <label class="check-field"><input id="horizontalBottoms" type="checkbox" /><span>Bas des barres horizontal</span></label>
+              <label class="check-field"><input id="inscribedTrapezoid" type="checkbox" /><span>Inscrire dans un trapèze</span></label>
+              <label class="check-field"><input id="transparentBackground" type="checkbox" /><span>Fond transparent</span></label>
+              <label class="check-field"><input id="transparentShapes" type="checkbox" /><span>Barres et liens transparents</span></label>
               <label><span>Arrondis <output data-value-for="roundedCorners">0</output></span><input id="roundedCorners" type="range" value="0.15" min="0" max="0.5" step="0.01" /></label>
             </div>
           </fieldset>

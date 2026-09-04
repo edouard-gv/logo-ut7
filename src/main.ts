@@ -12,6 +12,9 @@ type Settings = {
   linkWidth: number;
   horizontalTops: boolean;
   horizontalBottoms: boolean;
+  inscribedTrapezoid: boolean;
+  transparentBackground: boolean;
+  transparentShapes: boolean;
   roundedCorners: number;
   scale: number;
 };
@@ -50,7 +53,7 @@ function parseNotation(source: string): Shape {
       hasPendingGap = false;
       continue;
     }
-    const gapMatch = token.match(/^e(-?\d+(?:\.\d+)?)$/);
+    const gapMatch = token.match(/^e([+-]?\d+(?:\.\d+)?)$/);
     if (gapMatch) {
       if (!bars.length) throw new Error(`Espacement « ${token} » mal placé.`);
       pendingExtraGap += Number(gapMatch[1]);
@@ -87,6 +90,9 @@ function getSettings(): Settings {
     linkWidth: numberValue('linkWidth'),
     horizontalTops: $<HTMLInputElement>('#horizontalTops').checked,
     horizontalBottoms: $<HTMLInputElement>('#horizontalBottoms').checked,
+    inscribedTrapezoid: $<HTMLInputElement>('#inscribedTrapezoid').checked,
+    transparentBackground: $<HTMLInputElement>('#transparentBackground').checked,
+    transparentShapes: $<HTMLInputElement>('#transparentShapes').checked,
     roundedCorners: numberValue('roundedCorners'),
     scale: numberValue('scale'),
   };
@@ -147,6 +153,7 @@ function renderSvg(shape: Shape, settings: Settings): string {
   }
 
   const polygons: Polygon[] = [];
+  const linkPolygons: Polygon[] = [];
   const linePolygon = (x1: number, y1: number, x2: number, y2: number, width: number): Polygon => {
     const dx = x2 - x1;
     const dy = y2 - y1;
@@ -212,7 +219,9 @@ function renderSvg(shape: Shape, settings: Settings): string {
       const rightEdge = Math.max(
         ...linkEdgesY.map((edgeY) => horizontalRange(barPolygons[index + 1], edgeY)[0]),
       );
-      polygons.push(linePolygon(leftEdge, y, rightEdge, y, linkStroke));
+      const linkPolygon = linePolygon(leftEdge, y, rightEdge, y, linkStroke);
+      linkPolygons.push(linkPolygon);
+      polygons.push(linkPolygon);
     });
   });
   polygons.push(...barPolygons);
@@ -250,17 +259,147 @@ function renderSvg(shape: Shape, settings: Settings): string {
     return `${data}Z`;
   })).join('');
 
-  const allX = bars.flatMap((bar) => [bar.xBottom, bar.xTop]);
-  const allY = bars.flatMap((bar) => [bar.yBottom, bar.yTop]);
+  const outerSide = (polygon: Polygon, useLeftSide: boolean): [Point, Point] => {
+    const ring = polygon[0];
+    const sides: [Point, Point][] = [[ring[0], ring[1]], [ring[2], ring[3]]];
+    return sides.sort((first, second) => {
+      const firstX = (first[0][0] + first[1][0]) / 2;
+      const secondX = (second[0][0] + second[1][0]) / 2;
+      return useLeftSide ? firstX - secondX : secondX - firstX;
+    })[0];
+  };
+  const upwardUnit = (side: [Point, Point]): Point => {
+    const bottom = side[0][1] >= side[1][1] ? side[0] : side[1];
+    const top = bottom === side[0] ? side[1] : side[0];
+    const length = Math.hypot(top[0] - bottom[0], top[1] - bottom[1]);
+    return [(top[0] - bottom[0]) / length, (top[1] - bottom[1]) / length];
+  };
+  const leftSide = outerSide(barPolygons[0], true);
+  const rightSide = outerSide(barPolygons[barPolygons.length - 1], false);
+  const leftDirection = upwardUnit(leftSide);
+  const rightDirection = upwardUnit(rightSide);
+  const axisLength = Math.hypot(
+    leftDirection[0] + rightDirection[0],
+    leftDirection[1] + rightDirection[1],
+  );
+  const symmetryAxis: Point = [
+    (leftDirection[0] + rightDirection[0]) / axisLength,
+    (leftDirection[1] + rightDirection[1]) / axisLength,
+  ];
+  const projection = (point: Point): number =>
+    point[0] * symmetryAxis[0] + point[1] * symmetryAxis[1];
+  const extremeBarPoints = [barPolygons[0], barPolygons[barPolygons.length - 1]]
+    .flatMap((polygon) => polygon.flat()) as Point[];
+  const projections = extremeBarPoints.map(projection);
+  const bottomProjection = Math.min(...projections);
+  const topProjection = Math.max(...projections);
+  const intersectSide = (side: [Point, Point], support: number): Point => {
+    const direction: Point = [side[1][0] - side[0][0], side[1][1] - side[0][1]];
+    const denominator = direction[0] * symmetryAxis[0] + direction[1] * symmetryAxis[1];
+    const distance = (support - projection(side[0])) / denominator;
+    return [side[0][0] + direction[0] * distance, side[0][1] + direction[1] * distance];
+  };
+  const trapezoidPoints: Point[] = [
+    intersectSide(leftSide, bottomProjection),
+    intersectSide(rightSide, bottomProjection),
+    intersectSide(rightSide, topProjection),
+    intersectSide(leftSide, topProjection),
+  ];
+  const trapezoidPath = `${trapezoidPoints.map((point, index) =>
+    `${index ? 'L' : 'M'}${format(point[0])} ${format(point[1])}`,
+  ).join('')}Z`;
+  const usesBooleanCutout = settings.inscribedTrapezoid
+    && settings.transparentShapes
+    && !settings.transparentBackground
+    && settings.roundedCorners === 0;
+  const trapezoidPolygon: Polygon = [[...trapezoidPoints, trapezoidPoints[0]]];
+  const cornerFillers: Polygon[] = [];
+  if (usesBooleanCutout) {
+    const tolerance = 1e-5;
+    const addCornerFillers = (polygon: Polygon): void => {
+      const ring = polygon[0];
+      const caps: Array<{ corners: [Point, Point]; sides: [[Point, Point], [Point, Point]] }> = [
+        { corners: [ring[1], ring[2]], sides: [[ring[1], ring[0]], [ring[2], ring[3]]] },
+        { corners: [ring[0], ring[3]], sides: [[ring[0], ring[1]], [ring[3], ring[2]]] },
+      ];
+      caps.forEach(({ corners, sides }) => {
+        [bottomProjection, topProjection].forEach((support) => {
+          const touches = corners.map((corner) => Math.abs(projection(corner) - support) < tolerance);
+          if (touches[0] === touches[1]) return;
+          const touchingIndex = touches[0] ? 0 : 1;
+          const otherIndex = 1 - touchingIndex;
+          const intersection = intersectSide(sides[otherIndex], support);
+          const touchingCorner = corners[touchingIndex];
+          const otherCorner = corners[otherIndex];
+          const filler: Polygon = [[
+            touchingCorner,
+            otherCorner,
+            intersection,
+            touchingCorner,
+          ]];
+          const touchesHorizontalLink = linkPolygons.some((linkPolygon) => {
+            const points = linkPolygon[0].slice(0, -1);
+            const epsilon = 1e-5;
+            const left = Math.min(...points.map((point) => point[0])) - epsilon;
+            const right = Math.max(...points.map((point) => point[0])) + epsilon;
+            const top = Math.min(...points.map((point) => point[1])) - epsilon;
+            const bottom = Math.max(...points.map((point) => point[1])) + epsilon;
+            const expandedLink: Polygon = [[
+              [left, top], [right, top], [right, bottom], [left, bottom], [left, top],
+            ]];
+            return polygonClipping.intersection(filler, expandedLink).length > 0;
+          });
+          if (!touchesHorizontalLink) cornerFillers.push(filler);
+        });
+      });
+    };
+    addCornerFillers(barPolygons[0]);
+    addCornerFillers(barPolygons[barPolygons.length - 1]);
+  }
+  const expandedCutout = cornerFillers.length
+    ? polygonClipping.union(merged, ...cornerFillers)
+    : merged;
+  const booleanCutout = usesBooleanCutout
+    ? polygonClipping.difference(trapezoidPolygon, expandedCutout)
+    : [];
+  const booleanCutoutPath = booleanCutout.flatMap((polygon) => polygon.map((ring) => {
+    const [first, ...rest] = ring;
+    return `M${format(first[0])} ${format(first[1])}${rest.map((point) =>
+      `L${format(point[0])} ${format(point[1])}`,
+    ).join('')}Z`;
+  })).join('');
+
+  const allX = [...bars.flatMap((bar) => [bar.xBottom, bar.xTop]), ...trapezoidPoints.map((point) => point[0])];
+  const allY = [...bars.flatMap((bar) => [bar.yBottom, bar.yTop]), ...trapezoidPoints.map((point) => point[1])];
   const pad = Math.max(stroke, 10);
   const minX = Math.min(...allX) - pad;
   const maxX = Math.max(...allX) + pad;
   const minY = Math.min(...allY) - pad;
   const maxY = Math.max(...allY) + pad;
+  const backgroundShape = (color: string): string => settings.inscribedTrapezoid
+    ? `<path d="${trapezoidPath}" fill="${color}" />`
+    : `<rect x="${minX}" y="${minY}" width="${maxX - minX}" height="${maxY - minY}" fill="${color}" />`;
+  const usesCutoutMask = settings.transparentShapes
+    && !settings.transparentBackground
+    && !usesBooleanCutout;
+  const cutoutMask = usesCutoutMask
+    ? `<defs><mask id="shape-cutout" maskUnits="userSpaceOnUse" x="${minX}" y="${minY}" width="${maxX - minX}" height="${maxY - minY}" style="mask-type:luminance"><rect x="${minX}" y="${minY}" width="${maxX - minX}" height="${maxY - minY}" fill="white" /><path d="${pathData}" fill="black" fill-rule="evenodd" /></mask></defs>`
+    : '';
+  const background = settings.transparentBackground
+    ? ''
+    : settings.transparentShapes
+      ? usesBooleanCutout
+        ? `<path d="${booleanCutoutPath}" fill="#e9e8e3" fill-rule="evenodd" />`
+        : `<g mask="url(#shape-cutout)">${backgroundShape('#e9e8e3')}</g>`
+      : backgroundShape('#6b1426');
+  const foreground = settings.transparentShapes
+    ? ''
+    : `<path d="${pathData}" fill="#e9e8e3" fill-rule="evenodd" />`;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${maxX - minX} ${maxY - minY}" width="200" height="200" role="img" aria-label="Logo généré">
-  <rect x="${minX}" y="${minY}" width="${maxX - minX}" height="${maxY - minY}" fill="#6b1426" />
-  <path d="${pathData}" fill="#e9e8e3" fill-rule="evenodd" />
+  ${cutoutMask}
+  ${background}
+  ${foreground}
 </svg>`;
 }
 
