@@ -40,5 +40,22 @@ button:hover { background: #b9f34c; color: #171914; }
 .preview { flex: 1; display: grid; place-items: center; min-height: 390px; overflow: hidden; }
 .preview svg { width: 200px; height: 200px; overflow: visible; transition: transform .2s; }
 .error { min-height: 18px; margin: 0; color: #ff8e7c; font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace; font-size: 12px; text-align: center; }
-@media (max-width: 800px) { .app { padding: 42px 0; } .workspace { grid-template-columns: 1fr; } .preview-panel { min-height: 400px; } }
+@media (max-width: 800px) {
+  .app { padding: 42px 0; }
+  .workspace { grid-template-columns: 1fr; }
+  .preview-panel { display: contents; }
+  .preview-heading { padding: 20px 20px 0; }
+  .preview {
+    position: sticky;
+    bottom: 12px;
+    z-index: 10;
+    min-height: clamp(180px, 35vh, 260px);
+    border: 1px solid #30332d;
+    border-radius: 20px;
+    background: rgba(27, 29, 25, .92);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, .38);
+    backdrop-filter: blur(12px);
+  }
+  .error { padding: 0 20px; }
+}
 @media (max-width: 480px) { .app { width: min(100% - 24px, 1120px); } .controls { padding: 22px; } .control-grid, .control-grid.three { grid-template-columns: 1fr; } }
