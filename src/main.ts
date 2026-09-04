@@ -60,7 +60,8 @@ function parseNotation(source: string): Shape {
       hasPendingGap = true;
       continue;
     }
-    if (/^[0-3]+$/.test(token)) {
+    const isLinkToken = /^[0-3]+$/.test(token);
+    if (isLinkToken) {
       if (!bars.length || pendingLinks.length) throw new Error(`Lien « ${token} » mal placé.`);
       pendingLinks = [...new Set(token.split('').map(Number))];
       continue;
