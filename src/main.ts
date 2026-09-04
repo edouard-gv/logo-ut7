@@ -2,7 +2,14 @@ import './style.css';
 import polygonClipping from 'polygon-clipping';
 
 type BarKind = 'c' | 'm' | 'l';
-type Bar = { kind: BarKind; level: number; diagonal: boolean; extraGapBefore: number };
+type Bar = {
+  kind: BarKind;
+  level: number;
+  diagonal: boolean;
+  extraGapBefore: number;
+  empty: boolean;
+  widthMultiplier: number;
+};
 type Shape = { bars: Bar[]; links: number[][] };
 type Settings = {
   levelGaps: [number, number, number];
@@ -47,6 +54,26 @@ function parseNotation(source: string): Shape {
         level: Number(barMatch[2]),
         diagonal: Boolean(barMatch[3]),
         extraGapBefore: pendingExtraGap,
+        empty: false,
+        widthMultiplier: 1,
+      });
+      pendingLinks = [];
+      pendingExtraGap = 0;
+      hasPendingGap = false;
+      continue;
+    }
+    const emptyBarMatch = token.match(/^b(\+?\d+(?:\.\d+)?)?$/);
+    if (emptyBarMatch) {
+      if (bars.length) links.push(pendingLinks);
+      const widthMultiplier = emptyBarMatch[1] === undefined ? 1 : Number(emptyBarMatch[1]);
+      if (widthMultiplier < 0) throw new Error(`La largeur de « ${token} » ne peut pas être négative.`);
+      bars.push({
+        kind: 'l',
+        level: 0,
+        diagonal: false,
+        extraGapBefore: pendingExtraGap,
+        empty: true,
+        widthMultiplier,
       });
       pendingLinks = [];
       pendingExtraGap = 0;
@@ -210,7 +237,14 @@ function renderSvg(shape: Shape, settings: Settings): string {
   const stroke = settings.barWidth * svgUnitsPerLevel;
   const linkStroke = settings.linkWidth * svgUnitsPerLevel;
   const angle = settings.angle * Math.PI / 180;
-  const bars: Array<{ xBottom: number; xTop: number; yBottom: number; yTop: number }> = [];
+  const bars: Array<{
+    xBottom: number;
+    xTop: number;
+    yBottom: number;
+    yTop: number;
+    stroke: number;
+    empty: boolean;
+  }> = [];
   let previousRightEdge: number | null = null;
 
   // Une barre courte, moyenne ou longue occupe respectivement un, deux ou trois niveaux.
@@ -238,7 +272,8 @@ function renderSvg(shape: Shape, settings: Settings): string {
       rawBar.xTop - rawBar.xBottom,
       rawBar.yTop - rawBar.yBottom,
     );
-    const horizontalHalfStroke = Math.abs(rawBar.yTop - rawBar.yBottom) / axisLength * stroke / 2;
+    const barStroke = stroke * bar.widthMultiplier;
+    const horizontalHalfStroke = Math.abs(rawBar.yTop - rawBar.yBottom) / axisLength * barStroke / 2;
     const rawLeftEdge = Math.min(rawBar.xBottom, rawBar.xTop) - horizontalHalfStroke;
     const rawRightEdge = Math.max(rawBar.xBottom, rawBar.xTop) + horizontalHalfStroke;
     // L'espace sépare les contours extérieurs, même lorsque les barres sont inclinées.
@@ -251,6 +286,8 @@ function renderSvg(shape: Shape, settings: Settings): string {
       xTop: rawBar.xTop + offsetX,
       yBottom: rawBar.yBottom,
       yTop: rawBar.yTop,
+      stroke: barStroke,
+      empty: bar.empty,
     });
     previousRightEdge = rawRightEdge + offsetX;
   }
@@ -276,7 +313,7 @@ function renderSvg(shape: Shape, settings: Settings): string {
 
   // Les coupes haute et basse peuvent être rendues horizontales indépendamment.
   const barPolygons = bars.map((bar) => {
-    const polygon = linePolygon(bar.xBottom, bar.yBottom, bar.xTop, bar.yTop, stroke);
+    const polygon = linePolygon(bar.xBottom, bar.yBottom, bar.xTop, bar.yTop, bar.stroke);
     const ring = polygon[0];
     const sideSlope = (bar.xTop - bar.xBottom) / (bar.yTop - bar.yBottom);
     const moveAlongSideToY = (point: Point, targetY: number): void => {
@@ -329,9 +366,10 @@ function renderSvg(shape: Shape, settings: Settings): string {
       polygons.push(linkPolygon);
     });
   });
-  polygons.push(...barPolygons);
+  polygons.push(...barPolygons.filter((_, index) => !bars[index].empty));
 
   // Les barres et les liens forment une seule géométrie SVG.
+  if (!polygons.length) throw new Error('La notation ne contient aucune barre ni aucun lien visible.');
   const merged = polygonClipping.union(polygons[0], ...polygons.slice(1));
   const format = (value: number): string => Number(value.toFixed(4)).toString();
   // Le rayon d'arrondi s'applique à tous les coins de la géométrie fusionnée.
@@ -463,8 +501,8 @@ function renderSvg(shape: Shape, settings: Settings): string {
         });
       });
     };
-    addCornerFillers(barPolygons[0]);
-    addCornerFillers(barPolygons[barPolygons.length - 1]);
+    if (!bars[0].empty) addCornerFillers(barPolygons[0]);
+    if (!bars[bars.length - 1].empty) addCornerFillers(barPolygons[barPolygons.length - 1]);
   }
   const expandedCutout = cornerFillers.length
     ? polygonClipping.union(merged, ...cornerFillers)
