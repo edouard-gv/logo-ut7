@@ -1,5 +1,6 @@
 import './style.css';
 import polygonClipping from 'polygon-clipping';
+import { DEFAULT_CONFIGURATION } from './default-config';
 
 type BarKind = 'c' | 'm' | 'l';
 type Bar = {
@@ -244,9 +245,8 @@ function decodeConfiguration(encoded: string): SavedConfiguration {
   return JSON.parse(new TextDecoder().decode(bytes)) as SavedConfiguration;
 }
 
-function restoreConfigurationFromUrl(): string | null {
-  const encoded = new URL(window.location.href).searchParams.get('config');
-  if (!encoded) return null;
+function restoreConfiguration(): string | null {
+  const encoded = new URL(window.location.href).searchParams.get('config') ?? DEFAULT_CONFIGURATION;
   try {
     const configuration = decodeConfiguration(encoded);
     const [version, notation, savedValues, options, savedParameters] = configuration;
@@ -753,7 +753,7 @@ $('#save-config').addEventListener('click', async () => {
   }
 });
 
-const configurationError = restoreConfigurationFromUrl();
+const configurationError = restoreConfiguration();
 syncParameterControls();
 update();
 if (configurationError) error.textContent = configurationError;
