@@ -59,7 +59,7 @@ function getParameterValues(): ParameterValues {
 
 function syncParameterControls(restoredValues: ParameterValues = new Map()): void {
   const previousValues = getParameterValues();
-  const usages = parameterUsages($<HTMLInputElement>('#notation').value);
+  const usages = parameterUsages($<HTMLInputElement>('#phrase').value);
   const fieldset = $<HTMLFieldSetElement>('#parameters-fieldset');
   const container = $('#parameters');
   container.replaceChildren();
@@ -95,9 +95,9 @@ function parameterValue(index: number, values: ParameterValues): number {
   return value;
 }
 
-function parseNotation(source: string, parameterValues: ParameterValues): Shape {
+function parsePhrase(source: string, parameterValues: ParameterValues): Shape {
   const tokens = source.trim().toLowerCase().split(',').map((part) => part.trim()).filter(Boolean);
-  if (!tokens.length) throw new Error('La notation est vide.');
+  if (!tokens.length) throw new Error('La phrase est vide.');
 
   const bars: Bar[] = [];
   const links: number[][] = [];
@@ -160,8 +160,8 @@ function parseNotation(source: string, parameterValues: ParameterValues): Shape 
     throw new Error(`Élément inconnu : « ${token} »`);
   }
 
-  if (pendingLinks.length) throw new Error('La notation se termine par un lien sans barre.');
-  if (hasPendingGap) throw new Error('La notation se termine par un espacement sans barre.');
+  if (pendingLinks.length) throw new Error('La phrase se termine par un lien sans barre.');
+  if (hasPendingGap) throw new Error('La phrase se termine par un espacement sans barre.');
   if (bars.length < 2) throw new Error('Il faut au moins deux barres.');
   return { bars, links };
 }
@@ -203,7 +203,7 @@ type SavedValues = [
 ];
 type SavedConfiguration = [
   version: 1,
-  notation: string,
+  phrase: string,
   values: SavedValues,
   options: number,
   parameters: [index: number, value: number][],
@@ -218,7 +218,7 @@ function createSavedConfiguration(): SavedConfiguration {
     | (Number(settings.transparentShapes) << 4);
   return [
     1,
-    $<HTMLInputElement>('#notation').value,
+    $<HTMLInputElement>('#phrase').value,
     [
       ...settings.levelGaps,
       settings.barGap,
@@ -252,11 +252,11 @@ function restoreConfiguration(): string | null {
   const encoded = new URL(window.location.href).searchParams.get('config') ?? DEFAULT_CONFIGURATION;
   try {
     const configuration = decodeConfiguration(encoded);
-    const [version, notation, savedValues, options, savedParameters] = configuration;
-    if (version !== 1 || typeof notation !== 'string' || !Array.isArray(savedValues) || savedValues.length < 9 || typeof options !== 'number' || !Array.isArray(savedParameters)) {
+    const [version, phrase, savedValues, options, savedParameters] = configuration;
+    if (version !== 1 || typeof phrase !== 'string' || !Array.isArray(savedValues) || savedValues.length < 9 || typeof options !== 'number' || !Array.isArray(savedParameters)) {
       throw new Error('version inconnue');
     }
-    $<HTMLInputElement>('#notation').value = notation;
+    $<HTMLInputElement>('#phrase').value = phrase;
     const restoredParameters = new Map<number, number>();
     savedParameters.forEach((entry) => {
       if (!Array.isArray(entry) || entry.length !== 2 || !Number.isInteger(entry[0]) || !Number.isFinite(entry[1])) {
@@ -443,7 +443,7 @@ function renderSvg(shape: Shape, settings: Settings): string {
   polygons.push(...barPolygons.filter((_, index) => !bars[index].empty));
 
   // Les barres et les liens forment une seule géométrie SVG.
-  if (!polygons.length) throw new Error('La notation ne contient aucune barre ni aucun lien visible.');
+  if (!polygons.length) throw new Error('La phrase ne contient aucune barre ni aucun lien visible.');
   const merged = polygonClipping.union(polygons[0], ...polygons.slice(1));
   const format = (value: number): string => Number(value.toFixed(4)).toString();
   // Le rayon d'arrondi s'applique à tous les coins de la géométrie fusionnée.
@@ -628,9 +628,9 @@ function renderSvg(shape: Shape, settings: Settings): string {
 
 function update(): void {
   try {
-    const notation = $<HTMLInputElement>('#notation').value;
+    const phrase = $<HTMLInputElement>('#phrase').value;
     const settings = getSettings();
-    currentSvg = renderSvg(parseNotation(notation, getParameterValues()), settings);
+    currentSvg = renderSvg(parsePhrase(phrase, getParameterValues()), settings);
     preview.innerHTML = currentSvg;
     const svg = preview.querySelector('svg');
     if (svg) svg.style.transform = `scale(${settings.scale})`;
@@ -646,19 +646,19 @@ function update(): void {
     });
     error.textContent = '';
   } catch (reason) {
-    error.textContent = reason instanceof Error ? reason.message : 'Notation invalide.';
+    error.textContent = reason instanceof Error ? reason.message : 'Phrase invalide.';
   }
 }
 
 form.addEventListener('input', (event) => {
-  if ((event.target as HTMLInputElement).id === 'notation') syncParameterControls();
+  if ((event.target as HTMLInputElement).id === 'phrase') syncParameterControls();
   update();
 });
 $('#download').addEventListener('click', () => {
   if (!currentSvg) return;
   const settings = getSettings();
   const downloadSvg = renderSvg(
-    parseNotation($<HTMLInputElement>('#notation').value, getParameterValues()),
+    parsePhrase($<HTMLInputElement>('#phrase').value, getParameterValues()),
     settings,
   );
   const blob = new Blob([downloadSvg], { type: 'image/svg+xml' });
@@ -676,7 +676,7 @@ $('#download-png').addEventListener('click', async () => {
   try {
     const settings = getSettings();
     const downloadSvg = renderSvg(
-      parseNotation($<HTMLInputElement>('#notation').value, getParameterValues()),
+      parsePhrase($<HTMLInputElement>('#phrase').value, getParameterValues()),
       settings,
     );
     const svgDocument = new DOMParser().parseFromString(downloadSvg, 'image/svg+xml');

@@ -16,13 +16,13 @@
 
       <section class="workspace">
         <form id="controls" class="panel controls" novalidate>
-          <div class="notation-field">
-            <div class="notation-heading">
-              <label for="notation">Notation</label>
+          <div class="phrase-field">
+            <div class="phrase-heading">
+              <label for="phrase">Phrase</label>
               <button id="open-help" type="button" aria-label="Afficher l’aide" aria-haspopup="dialog" aria-controls="help-dialog">ⓘ</button>
             </div>
-            <input id="notation" spellcheck="false" autocomplete="off" />
-            <small id="notation-help">Séparateur , · / incline · e1 ajoute · e-1 retire · b crée une barre vide · ep1 et bp1 sont paramétrables</small>
+            <input id="phrase" spellcheck="false" autocomplete="off" />
+            <small id="phrase-help">Séparateur , · / incline · e1 ajoute · e-1 retire · b crée une barre vide · ep1 et bp1 sont paramétrables</small>
           </div>
 
           <fieldset id="parameters-fieldset" hidden>
@@ -85,8 +85,8 @@
       </div>
       <p class="help-intro">Cette page permet de créer des logos en assemblant des <strong>barres</strong> (lignes verticales) et des <strong>liens</strong> (lignes horizontales), positionnables sur quatre niveaux de 0 à 3, de bas en haut.</p>
       <ul class="help-list">
-        <li><strong>Notation :</strong> éléments séparés par des virgules ; elle doit contenir au moins deux barres.
-          <ul class="notation-list">
+        <li><strong>Phrase :</strong> éléments séparés par des virgules ; elle doit contenir au moins deux barres.
+          <ul class="phrase-list">
             <li><strong>Barres :</strong> <code>tn</code> où t désigne la taille de la barre (c,m,l), et n la niveau bas de la barre. <code>/</code> incline la barre (<code>m1/</code>).</li>
             <li><strong>Liens :</strong> chiffres entre deux barres : <code>c1,1,c1</code> les relie au niveau 1 ; <code>12</code> les relie aux niveaux 1 et au niveau 2.</li>
             <li><strong>Espaces :</strong> <code>e1</code> ajoute un espacement, <code>e-1</code> en retire un ; décimales avec un point (<code>e-0.5</code>).</li>
@@ -126,7 +126,7 @@
         <li><strong>Transparence :</strong> « Fond transparent » retire le fond ; « Barres et liens transparents » découpe leurs formes dans le fond crème.</li>
         <li><strong>Arrondis :</strong> arrondit les coins ; 0 conserve les angles vifs.</li>
         <li><strong>Échelle :</strong> ajuste la taille de l’aperçu et du PNG.</li>
-        <li><strong>Sauver :</strong> copie une URL qui restaure la notation et tous les réglages, paramètres compris. Sans URL sauvegardée, les réglages par défaut sont chargés.</li>
+        <li><strong>Sauver :</strong> copie une URL qui restaure la phrase et tous les réglages, paramètres compris. Sans URL sauvegardée, les réglages par défaut sont chargés.</li>
         <li><strong>Télécharger SVG / PNG :</strong> exporte le logo ; le nom du fichier contient sa configuration.</li>
       </ul>
     </dialog>
