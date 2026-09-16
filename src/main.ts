@@ -34,6 +34,9 @@ const form = $('#controls');
 const preview = $('#preview');
 const error = $('#error');
 const scaleOutput = $('#scale-output');
+$('#open-help').addEventListener('click', () => {
+  $<HTMLDialogElement>('#help-dialog').showModal();
+});
 let currentSvg = '';
 
 type ParameterValues = Map<number, number>;

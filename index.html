@@ -16,11 +16,14 @@
 
       <section class="workspace">
         <form id="controls" class="panel controls" novalidate>
-          <label class="notation-field">
-            <span>Notation</span>
+          <div class="notation-field">
+            <div class="notation-heading">
+              <label for="notation">Notation</label>
+              <button id="open-help" type="button" aria-label="Afficher l’aide" aria-haspopup="dialog" aria-controls="help-dialog">ⓘ</button>
+            </div>
             <input id="notation" spellcheck="false" autocomplete="off" />
             <small id="notation-help">Séparateur , · / incline · e1 ajoute · e-1 retire · b crée une barre vide · ep1 et bp1 sont paramétrables</small>
-          </label>
+          </div>
 
           <fieldset id="parameters-fieldset" hidden>
             <legend>Paramètres</legend>
@@ -75,6 +78,58 @@
         </section>
       </section>
     </main>
+    <dialog id="help-dialog" aria-labelledby="help-title">
+      <div class="help-heading">
+        <h2 id="help-title">Aide</h2>
+        <form method="dialog"><button autofocus>Fermer</button></form>
+      </div>
+      <p class="help-intro">Cette page permet de créer des logos en assemblant des <strong>barres</strong> (lignes verticales) et des <strong>liens</strong> (lignes horizontales), positionnables sur quatre niveaux de 0 à 3, de bas en haut.</p>
+      <ul class="help-list">
+        <li><strong>Notation :</strong> éléments séparés par des virgules ; elle doit contenir au moins deux barres.
+          <ul class="notation-list">
+            <li><strong>Barres :</strong> <code>tn</code> où t désigne la taille de la barre (c,m,l), et n la niveau bas de la barre. <code>/</code> incline la barre (<code>m1/</code>).</li>
+            <li><strong>Liens :</strong> chiffres entre deux barres : <code>c1,1,c1</code> les relie au niveau 1 ; <code>12</code> les relie aux niveaux 1 et au niveau 2.</li>
+            <li><strong>Espaces :</strong> <code>e1</code> ajoute un espacement, <code>e-1</code> en retire un ; décimales avec un point (<code>e-0.5</code>).</li>
+            <li><strong>Barres vides :</strong> <code>b</code> réserve une épaisseur de barre sans tracé ; <code>b2</code> en réserve deux, <code>b0</code> aucune. Elles peuvent recevoir des liens de 0 à 3.</li>
+            <li><strong>Paramètres :</strong> <code>ep1</code>, <code>bp2</code> créent des curseurs réutilisables : −1 à 1 pour les espaces, 0 à 1 si utilisés par une barre vide.</li>
+          </ul>
+          <figure class="help-example">
+            <figcaption><strong>Exemple :</strong> <code>c1,1,ep1,c1,e-0.5,c1,1,ep1,c1</code> (dessine deux petits u presque collés de largeur paramétrable)</figcaption>
+            <div class="example-elements">
+              <div class="example-element">
+                <code>c1</code>
+                <svg viewBox="0 0 64 40" aria-hidden="true"><path d="M32 34V6" /></svg>
+                <span>Barre verticale<br>du niveau 1 à 2</span>
+              </div>
+              <div class="example-element">
+                <code>1</code>
+                <svg viewBox="0 0 64 40" aria-hidden="true"><path class="example-context" d="M10 34V6M54 34V6" /><path d="M10 34H54" /></svg>
+                <span>Lien horizontal<br>entre les barres au niveau 1</span>
+              </div>
+              <div class="example-element">
+                <code>e-0.5</code>
+                <svg viewBox="0 0 64 40" aria-hidden="true"><path class="example-context" d="M10 34V6M54 34V6" /><path class="example-dimension" d="M16 20H48M21 15L16 20L21 25M43 15L48 20L43 25" /></svg>
+                <span>Espace réduit <br>d'½ espacement entre barres</span>
+              </div>
+              <div class="example-element">
+                <code>ep1</code>
+                <svg viewBox="0 0 64 40" aria-hidden="true"><path class="example-dimension" d="M8 20H56" /><circle cx="36" cy="20" r="5" /></svg>
+                <span>Espace ajouté ou réduit<br>réglable avec le curseur p1</span>
+              </div>
+            </div>
+          </figure>
+        </li>
+        <li><strong>Espacement des niveaux :</strong> règle les distances verticales.</li>
+        <li><strong>Géométrie :</strong> règle l’espace entre barres, l’inclinaison et les épaisseurs des barres et des liens.</li>
+        <li><strong>Haut / bas horizontal :</strong> coupe les extrémités des barres inclinées horizontalement ; chaque option est indépendante.</li>
+        <li><strong>Trapèze :</strong> adapte le fond aux barres extérieures.</li>
+        <li><strong>Transparence :</strong> « Fond transparent » retire le fond ; « Barres et liens transparents » découpe leurs formes dans le fond crème.</li>
+        <li><strong>Arrondis :</strong> arrondit les coins ; 0 conserve les angles vifs.</li>
+        <li><strong>Échelle :</strong> ajuste la taille de l’aperçu et du PNG.</li>
+        <li><strong>Sauver :</strong> copie une URL qui restaure la notation et tous les réglages, paramètres compris. Sans URL sauvegardée, les réglages par défaut sont chargés.</li>
+        <li><strong>Télécharger SVG / PNG :</strong> exporte le logo ; le nom du fichier contient sa configuration.</li>
+      </ul>
+    </dialog>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
